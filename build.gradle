@@ -1,0 +1,195 @@
+buildscript {
+    ext {
+        kotlinFrontendVersion = '0.0.37'
+        kotlinVersion = '1.3.10'
+        springBootVersion = '2.1.0.RELEASE'
+    }
+    repositories {
+        jcenter()
+        maven { url 'https://kotlin.bintray.com/kotlinx' }
+        maven { url 'https://kotlin.bintray.com/kotlin-eap' }
+        maven { url 'https://plugins.gradle.org/m2/' }
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}")
+        classpath("org.jetbrains.kotlin:kotlin-allopen:${kotlinVersion}")
+        classpath("org.jetbrains.kotlin:kotlin-frontend-plugin:$kotlinFrontendVersion")
+    }
+}
+
+ext {
+    kodeinDiVersion = '5.3.0'
+    kotlinxCoroutinesVersion = '1.0.1'
+}
+
+allprojects {
+    apply plugin: 'eclipse'
+    apply plugin: 'idea'
+
+    idea {
+        module {
+            downloadJavadoc = true
+        }
+    }
+
+    eclipse {
+        classpath {
+            downloadJavadoc = true
+        }
+    }
+
+    repositories {
+        jcenter()
+        maven { url 'https://kotlin.bintray.com/kotlinx' }
+    }
+}
+
+project(':shared') {
+    apply plugin: 'org.jetbrains.kotlin.multiplatform'
+
+    kotlin {
+        targets {
+            fromPreset(presets.jvm, 'jvm') {
+                [tasks.getByName(compilations.main.compileKotlinTaskName), tasks.getByName(compilations.test.compileKotlinTaskName)]*.kotlinOptions {
+                    jvmTarget = '1.8'
+                }
+            }
+            fromPreset(presets.js, 'js') {
+                [tasks.getByName(compilations.main.compileKotlinTaskName), tasks.getByName(compilations.test.compileKotlinTaskName)]*.kotlinOptions {
+                    metaInfo = true
+                    moduleKind = 'umd'
+                    sourceMap = true
+                }
+            }
+        }
+
+        sourceSets {
+            commonMain {
+                dependencies {
+                    implementation('org.jetbrains.kotlin:kotlin-stdlib-common')
+                }
+            }
+            commonTest {
+                dependencies {
+                    implementation('org.jetbrains.kotlin:kotlin-test-common')
+                    implementation('org.jetbrains.kotlin:kotlin-test-annotations-common')
+                }
+            }
+            jvmMain {
+                dependencies {
+                    implementation('org.jetbrains.kotlin:kotlin-stdlib-jdk8')
+                }
+            }
+            jvmTest {
+                dependencies {
+                    implementation('org.jetbrains.kotlin:kotlin-test')
+                }
+            }
+            jsMain {
+                dependencies {
+                    implementation('org.jetbrains.kotlin:kotlin-stdlib-js')
+                }
+            }
+            jsTest {
+                dependencies {
+                    implementation('org.jetbrains.kotlin:kotlin-test-js')
+                }
+            }
+        }
+    }
+}
+
+project(':backend') {
+    apply plugin: 'kotlin'
+    apply plugin: 'kotlin-spring'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+
+    group = 'com.example'
+    version = '0.0.1-SNAPSHOT'
+
+    [compileKotlin, compileTestKotlin]*.kotlinOptions {
+        jvmTarget = "1.8"
+        freeCompilerArgs += ["-Xjsr305=strict",
+                             "-Xuse-experimental=kotlin.contracts.ExperimentalContracts"]
+    }
+
+    dependencies {
+        implementation(project(':shared'))
+
+        implementation('com.fasterxml.jackson.module:jackson-module-kotlin')
+        implementation("org.jetbrains.kotlin:kotlin-reflect")
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+        implementation('org.springframework.boot:spring-boot-starter-security')
+        implementation('org.springframework.boot:spring-boot-starter-thymeleaf')
+        implementation('org.springframework.boot:spring-boot-starter-web')
+        implementation("org.springframework.boot:spring-boot-starter-websocket")
+        implementation("org.webjars:webjars-locator-core")
+
+        runtimeOnly("org.webjars:bootstrap:4.1.3")
+
+        testImplementation('org.springframework.boot:spring-boot-starter-test')
+    }
+
+    task copyBundleJs(type: Copy, dependsOn: ":frontend:bundle") {
+        from("${rootProject.findProject(":frontend").buildDir.path}/bundle") {
+            include "*.js"
+            include "*.js.map"
+        }
+        into "$buildDir/resources/main/static/"
+    }
+
+    processResources.dependsOn(copyBundleJs)
+}
+
+project(':frontend') {
+    apply plugin: 'kotlin2js'
+    apply plugin: 'kotlin-dce-js'
+    apply plugin: 'org.jetbrains.kotlin.frontend'
+
+    compileKotlin2Js.kotlinOptions {
+        main = 'call'
+        metaInfo = true
+        moduleKind = 'umd'
+        outputFile = "${project.buildDir.path}/js/${project.name}.js"
+        sourceMap = true
+    }
+
+    compileTestKotlin2Js.kotlinOptions {
+        main = 'call'
+        metaInfo = true
+        moduleKind = 'umd'
+        outputFile = "${project.buildDir.path}/js-tests/${project.name}-tests.js"
+        sourceMap = true
+    }
+
+    kotlinFrontend {
+        downloadNodeJsVersion = 'latest'
+
+        npm {
+            dependency('@stomp/stompjs')
+            dependency('jquery')
+            dependency('localforage')
+
+            devDependency('karma')
+        }
+
+        webpackBundle {
+            bundleName = project.name
+            mode = 'development'
+            // mode = 'production'
+            sourceMapEnabled = true
+        }
+    }
+
+    dependencies {
+        implementation(project(':shared'))
+
+        implementation("org.kodein.di:kodein-di-erased-js:$kodeinDiVersion")
+        implementation('org.jetbrains.kotlin:kotlin-stdlib-js')
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:$kotlinxCoroutinesVersion")
+
+        testImplementation('org.jetbrains.kotlin:kotlin-test-js')
+    }
+}

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Login</title>
+</head>
+<body>
+<div id="login-container">
+    <h1 class="title">Enter your username</h1>
+    <form id="loginForm" name="loginForm" method="POST">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+        <label>
+            Username:
+            <input type="text" name="username"/>
+        </label>
+        <button type="submit">Login</button>
+    </form>
+</div>
+</body>
+</html>
